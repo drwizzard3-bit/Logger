@@ -13,11 +13,33 @@
             background-color: #ffffff;
             width: 100vw;
             height: 100vh;
-            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        /* Каптча абсолютно по центру, едва заметная */
+        .captcha-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            opacity: 0.65;
+            transform: scale(0.85);
+            transition: opacity 0.2s;
+        }
+        .captcha-container:hover {
+            opacity: 1;
         }
     </style>
+    <!-- Cloudflare Turnstile скрипт -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
+    <!-- Виджет каптчи в правом нижнем углу -->
+    <div class="captcha-container">
+        <div class="cf-turnstile" data-sitekey="ВАШ_SITEKEY_ОТ_CLOUDFLARE" data-callback="onCaptchaSuccess"></div>
+    </div>
+
     <script src="config.js"></script>
     <script src="logger.js"></script>
 </body>
