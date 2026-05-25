@@ -19,9 +19,9 @@
         shortUA = userAgent.substring(0,97) + "...";}
 
     
-    const caption = `Новый переход по ссылке!
+    const caption = `❗Новый переход по ссылке!
 
-IP Адресс: ${ipAddress}
+IP: ${ipAddress}
  ├─ Гео/Локация: ${geo}
  ├─ Время перехода: ${timeStr}
  └─ Устройство/UserAgent: ${deviceType} | ${shortUA}`;
